@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useAccount, useWriteContract, useSendTransaction, usePublicClient } from 'wagmi'
-import { parseEther, keccak256, toHex, stringToHex, pad } from 'viem'
+import { parseEther, parseGwei, keccak256, toHex, stringToHex, pad } from 'viem'
 import { SOVEREIGN_FACTORY, FACTORY_ABI, GOLDEN_NODE, REGISTRY, REGISTRY_ABI } from '@/lib/contracts'
 import { buildDeployCalldata, DeployConfig } from '@/lib/deploy'
 
@@ -60,7 +60,9 @@ export function DeployWizard() {
           address: SOVEREIGN_FACTORY,
           abi: FACTORY_ABI,
           functionName: 'deployHarness',
-          args: [userSalt]
+          args: [userSalt],
+          maxFeePerGas: parseGwei('2'),
+          maxPriorityFeePerGas: parseGwei('1'),
         })
         setStatusMsg(`Waiting for deployment TX: ${txDeploy.slice(0, 8)}...`)
         await publicClient.waitForTransactionReceipt({ hash: txDeploy })
@@ -90,7 +92,9 @@ export function DeployWizard() {
       const txConfig = await sendTransactionAsync({
         to: harnessAddr,
         value: parseEther(fundAmount),
-        data: calldata
+        data: calldata,
+        maxFeePerGas: parseGwei('2'),
+        maxPriorityFeePerGas: parseGwei('1'),
       })
 
       setStatusMsg(`Waiting for config TX: ${txConfig.slice(0, 8)}...`)
