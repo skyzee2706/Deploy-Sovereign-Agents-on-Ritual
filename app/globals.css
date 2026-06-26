@@ -34,7 +34,7 @@ body {
 }
 
 .navbar-container {
-  max-w-7xl;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 1rem 2rem;
   display: flex;
