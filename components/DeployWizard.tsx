@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { useAccount, useWriteContract, usePublicClient } from 'wagmi'
+import { useAccount, useWriteContract, useSendTransaction, usePublicClient } from 'wagmi'
 import { parseEther, keccak256, toHex, stringToHex, pad } from 'viem'
 import { SOVEREIGN_FACTORY, FACTORY_ABI, GOLDEN_NODE } from '@/lib/contracts'
 import { buildDeployCalldata, DeployConfig } from '@/lib/deploy'
@@ -9,6 +9,7 @@ export function DeployWizard() {
   const { address, isConnected } = useAccount()
   const publicClient = usePublicClient()
   const { writeContractAsync } = useWriteContract()
+  const { sendTransactionAsync } = useSendTransaction()
 
   // State
   const [step, setStep] = useState(1)
@@ -48,16 +49,22 @@ export function DeployWizard() {
         args: [address, userSalt]
       })
 
-      // 2. Deploy Harness (Transaction 1)
-      setStatusMsg('Deploying Harness (Please sign in wallet)...')
-      const txDeploy = await writeContractAsync({
-        address: SOVEREIGN_FACTORY,
-        abi: FACTORY_ABI,
-        functionName: 'deployHarness',
-        args: [userSalt]
-      })
-      setStatusMsg(`Waiting for deployment TX: ${txDeploy.slice(0, 8)}...`)
-      await publicClient.waitForTransactionReceipt({ hash: txDeploy })
+      // 1.5. Check if already deployed
+      const bytecode = await publicClient.getBytecode({ address: harnessAddr })
+      if (bytecode && bytecode !== '0x') {
+        setStatusMsg('Harness already deployed with this salt. Skipping deploy...')
+      } else {
+        // 2. Deploy Harness (Transaction 1)
+        setStatusMsg('Deploying Harness (Please sign in wallet)...')
+        const txDeploy = await writeContractAsync({
+          address: SOVEREIGN_FACTORY,
+          abi: FACTORY_ABI,
+          functionName: 'deployHarness',
+          args: [userSalt]
+        })
+        setStatusMsg(`Waiting for deployment TX: ${txDeploy.slice(0, 8)}...`)
+        await publicClient.waitForTransactionReceipt({ hash: txDeploy })
+      }
 
       // 3. Build configure calldata (ECIES encryption happens here)
       setStatusMsg('Encrypting secrets and building config...')
@@ -67,23 +74,13 @@ export function DeployWizard() {
       const calldata = await buildDeployCalldata(config, GOLDEN_NODE, goldenNodePubKey, harnessAddr)
 
       // 4. Configure and Fund (Transaction 2)
-      setStatusMsg('Configuring and Funding (Please sign 2nd TX in wallet)...')
+      setStatusMsg('Configuring and Funding (Please sign configuration TX)...')
       
-      const txConfig = await writeContractAsync({
-        address: harnessAddr,
-        abi: [{
-          name: 'configureFundAndStart',
-          type: 'function',
-          stateMutability: 'payable',
-          inputs: [],
-          outputs: []
-        }], // Dummy ABI, we send raw data
-        functionName: 'configureFundAndStart',
-        args: [],
+      const txConfig = await sendTransactionAsync({
+        to: harnessAddr,
         value: parseEther(fundAmount),
-        // @ts-ignore
         data: calldata
-      } as any)
+      })
 
       setStatusMsg(`Waiting for config TX: ${txConfig.slice(0, 8)}...`)
       await publicClient.waitForTransactionReceipt({ hash: txConfig })
