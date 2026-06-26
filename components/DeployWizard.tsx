@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useAccount, useWriteContract, useSendTransaction, usePublicClient } from 'wagmi'
 import { parseEther, keccak256, toHex, stringToHex, pad } from 'viem'
-import { SOVEREIGN_FACTORY, FACTORY_ABI, GOLDEN_NODE } from '@/lib/contracts'
+import { SOVEREIGN_FACTORY, FACTORY_ABI, GOLDEN_NODE, REGISTRY, REGISTRY_ABI } from '@/lib/contracts'
 import { buildDeployCalldata, DeployConfig } from '@/lib/deploy'
 
 export function DeployWizard() {
@@ -67,9 +67,20 @@ export function DeployWizard() {
       }
 
       // 3. Build configure calldata (ECIES encryption happens here)
+      setStatusMsg('Fetching Golden Node public key from Registry...')
+      
+      const services = await publicClient.readContract({
+        address: REGISTRY,
+        abi: REGISTRY_ABI,
+        functionName: 'getServicesByCapability',
+        args: [0, true]
+      }) as any[]
+
+      const goldenService = services.find((s: any) => s.node.teeAddress.toLowerCase() === GOLDEN_NODE.toLowerCase())
+      if (!goldenService) throw new Error("Golden Node not found in registry")
+      const goldenNodePubKey = goldenService.node.publicKey
+
       setStatusMsg('Encrypting secrets and building config...')
-      // We hardcode Golden Node pubkey for now (as in python script)
-      const goldenNodePubKey = "0x04bd8439486c9e03d360fa4e157790b4dfec65e4e70e947b19a16a4d70b4716768a4175b2210a44274c44f31cce167f259740a1eb58a964ce2857beaeec7fbd9d7"
       
       const calldata = await buildDeployCalldata(config, GOLDEN_NODE, goldenNodePubKey, harnessAddr)
 
