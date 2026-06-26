@@ -8,6 +8,7 @@ export interface DeployConfig {
   hfRepoId: string
   model: string
   agentPrompt: string
+  salt: string
   frequency: number
   cliType: number
 }
